@@ -128,8 +128,6 @@ class GDTS(torch.nn.Module):
             "FDE": [],
             "ADE_world": [],
             "FDE_world": [],
-            "ADE_traj": [],
-            "FDE_traj": [],
         }
         return test_metrics
 
@@ -139,8 +137,6 @@ class GDTS(torch.nn.Module):
             "FDE": 1e9,
             "ADE_world": 1e9,
             "FDE_world": 1e9,
-            'ADE_traj': 1e9,
-            'FDE_traj': 1e9,
         }
         return best_metrics
 
@@ -189,8 +185,6 @@ class GDTS(torch.nn.Module):
         predictions = predictions.detach() * self.args.down_factor
         ground_truth = inputs["x_augmented"][:,:,6:8].detach()
         ground_truth = ground_truth.detach() * self.args.down_factor
-        traj_init_guess  = all_aux_outputs['traj_init_guess']
-        traj_init_guess = traj_init_guess.detach() * self.args.down_factor
 
         # convert to world coordinates
         scene = inputs["scene"]
@@ -201,10 +195,6 @@ class GDTS(torch.nn.Module):
 
         GT_world = scene.make_world_coord_torch(ground_truth)
 
-        traj_world = []
-        for i in range(traj_init_guess.shape[0]):
-            traj_world.append(scene.make_world_coord_torch(traj_init_guess[i]))
-        traj_world = torch.stack(traj_world)
 
         if metric_name == 'ADE':
             return ADE_best_of(predictions, ground_truth, metric_mask, obs_length)
@@ -214,11 +204,6 @@ class GDTS(torch.nn.Module):
             return ADE_best_of(pred_world, GT_world, metric_mask, obs_length)
         elif metric_name == 'FDE_world':
             return FDE_best_of(pred_world, GT_world, metric_mask, obs_length)
-        
-        if metric_name == 'ADE_traj':
-            return ADE_best_of(traj_world, GT_world, metric_mask, obs_length)
-        elif metric_name == 'FDE_traj':
-            return FDE_best_of(traj_world, GT_world, metric_mask, obs_length)
         else:
             raise ValueError("This metric has not been implemented yet!")
 
@@ -258,14 +243,6 @@ class GDTS(torch.nn.Module):
             goal_point = goal_point_start[:, sample_idx].to(self.device) # (B,num_sample,2)->(B,2)
             goal_point = goal_point.detach()
 
-            #### linear interpolation to get trajectory init guess
-            traj_init_guess = torch.zeros([self.args.seq_length, num_agents,2]).to(self.device) # (T,B,2)
-            traj_init_guess[:self.args.obs_length] = x[:self.args.obs_length,:,6:8]
-
-            step = (goal_point - x_ori) / self.args.pred_length
-            for i in range(self.args.pred_length): 
-                traj_init_guess[i+self.args.obs_length] = step * (i+1) + x_ori
-
             # agents trajectory up to now
             current_agents = torch.zeros([num_agents, self.args.obs_length, 8]).to(self.device)
             current_agents[:,:,2:] = x[:self.args.obs_length,:,:6].permute(1,0,2)
@@ -278,7 +255,6 @@ class GDTS(torch.nn.Module):
             aux_outputs = {
             "goal_logit_map": goal_logit_map_start,
             "goal_point": goal_point, # B, 2
-            "traj_init_guess": traj_init_guess.detach(), # (T, B, 2)
             }
 
             all_context.append(temporal_input_embedded)
@@ -294,27 +270,6 @@ class GDTS(torch.nn.Module):
         num_agents= x.shape[1]
 
         all_context, all_aux_outputs = self.encode(inputs, if_test=if_test) 
-
-        # all_predicted_y_pos = self.ts_sample(all_context=all_context) # [B,1,512] -> [B, Tf, 2]   
-        # traj_init_guess = all_aux_outputs["traj_init_guess"] # (20, T, B, 2) 
-        # for sample_idx in range(all_predicted_y_pos.shape[0]):
-        #     predicted_y_pos = all_predicted_y_pos[sample_idx].permute(1,0,2) # [Tf, B, 2]
-        #     last_obs_pos = x[self.args.obs_length-1:self.args.obs_length,:,6:] # [1, B, 2]
-        #     outputs = torch.zeros(seq_length, num_agents, 2).to(self.device) # [Tp+Tf, B, 2]
-        #     outputs[:self.args.obs_length] = x[:self.args.obs_length,:,6:]
-        #     outputs[self.args.obs_length:] = predicted_y_pos +  traj_init_guess[sample_idx,self.args.obs_length:,:,:]
-
-        #     all_outputs.append(outputs)
-
-        # all_predicted_y_pos = self.ts_sample(all_context=all_context) # [B,1,512] -> [B, Tf, 2]
-        # for sample_idx in range(all_predicted_y_vel.shape[0]):
-            
-        #     predicted_y_pos = all_predicted_y_pos[sample_idx].permute(1,0,2)
-        #     last_obs_pos = x[self.args.obs_length-1,:,6:8].unsqueeze(0) # [1, B,  2] 
-        #     outputs = torch.zeros(seq_length, num_agents, 2).to(self.device) # [Tp+Tf, B, 2]
-        #     outputs[:self.args.obs_length] = x[:self.args.obs_length,:,6:8]
-        #     outputs[self.args.obs_length:] = predicted_y_pos + last_obs_pos
-        #     all_outputs.append(outputs)
 
         vy = self.ts_sample(all_context=all_context) # [20, B, 1, 512] -> [20, B, Tf, 2]
         y = torch.zeros([self.args.num_samples, self.args.seq_length, num_agents, 2]).to(self.device)

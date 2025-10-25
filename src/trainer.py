@@ -100,8 +100,7 @@ class trainer(object):
             # log_file header only the first time
             with open(self.log_curve_file, 'w') as f:
                 f.write("epoch,learning_rate,"
-                        "valid_ADE,valid_FDE,"
-                        "valid_ADE_traj,valid_FDE_traj," +
+                        "valid_ADE,valid_FDE," +
                         ",".join(sorted(self.net.init_losses().keys())) +
                         "\n")
         return start_epoch
@@ -177,7 +176,7 @@ class trainer(object):
         print results and save log data.
         """
         # saved metrics before validation begins
-        valid_metrics = {"valid_ADE": 0, "valid_FDE": 0, "valid_ADE_traj": 0, "valid_FDE_traj": 0}
+        valid_metrics = {"valid_ADE": 0, "valid_FDE": 0}
 
         # initial learning rate
         if self.scheduler is not None:
@@ -249,9 +248,7 @@ class trainer(object):
                     f.write(','.join(str(m) for m in [
                         epoch, learning_rate,
                         valid_metrics["valid_ADE"],
-                        valid_metrics["valid_FDE"],
-                        valid_metrics["valid_ADE_traj"],
-                        valid_metrics["valid_FDE_traj"]] +
+                        valid_metrics["valid_FDE"]] +
                         [train_losses[loss_name] for loss_name in sorted(
                             train_losses)]) + '\n')
             else:
@@ -368,7 +365,6 @@ class trainer(object):
                     self.net.compute_model_metrics(
                         metric_name=metric_name,
                         predictions=all_output,
-                        # predictions=traj_init_guess,
                         metric_mask=metric_mask,
                         all_aux_outputs=all_aux_outputs,
                         inputs=inputs,

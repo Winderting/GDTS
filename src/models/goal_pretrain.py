@@ -137,7 +137,6 @@ class Goal_Pretrain(torch.nn.Module):
     def compute_model_metrics(self,
                               metric_name,
                               predictions,
-                              traj_init_guess,
                               ground_truth,
                               seq_list,
                               metric_mask,
@@ -150,16 +149,11 @@ class Goal_Pretrain(torch.nn.Module):
         # scale back to original dimension
         predictions = predictions.detach() * self.args.down_factor
         ground_truth = ground_truth.detach() * self.args.down_factor
-        traj_init_guess = traj_init_guess.detach() * self.args.down_factor
         # convert to world coordinates
         scene = inputs["scene"]
 
         GT_world = scene.make_world_coord_torch(ground_truth)
 
-        traj_world = []
-        for i in range(traj_init_guess.shape[0]):
-            traj_world.append(scene.make_world_coord_torch(traj_init_guess[i]))
-        traj_world = torch.stack(traj_world)
         
         if metric_name == 'goal_BCE':
             # compute goal loss
@@ -170,12 +164,6 @@ class Goal_Pretrain(torch.nn.Module):
             goal_BCE = Goal_BCE_loss(
                 goal_logit_map, out_maps_GT_goal, loss_mask)
             return [goal_BCE.tolist()]
-        if metric_name == 'ADE_world_traj':
-            return ADE_best_of(
-                traj_world, GT_world, metric_mask, obs_length)
-        elif metric_name == 'FDE_world_traj':
-            return FDE_best_of(
-                traj_world, GT_world, metric_mask, obs_length)
         else:
             raise ValueError("This metric has not been implemented yet!")
 
@@ -200,20 +188,8 @@ class Goal_Pretrain(torch.nn.Module):
         batch_coords = inputs["abs_pixel_coord"].detach()
         # Number of agent in current batch_abs_world
         seq_length, num_agents, _ = batch_coords.shape # (T, B, 2)
-        all_traj_init_guess = torch.zeros([20, seq_length, num_agents, self.output_size]).to(self.device)
-        for sample_idx in range(20):
-            # select the sample_idx-th goal point for all agents
-            # print(goal_point_start.shape)
-            goal_point = goal_point_start[:, sample_idx].to(self.device) # (B,num_sample,2)->(B,2) 
-            # guess the future trajectory and encode it
-            traj_init_guess = torch.zeros([seq_length, num_agents, self.output_size]).to(self.device) # (T,B,2)
-            traj_init_guess[:self.args.obs_length] = batch_coords[:self.args.obs_length]
-            step = (goal_point - batch_coords[self.args.obs_length-1]) / (self.args.pred_length)
-            for i in range(self.args.obs_length,seq_length): 
-                traj_init_guess[i] = step + traj_init_guess[i-1]
-            all_traj_init_guess[sample_idx] = traj_init_guess
 
-        return goal_logit_map_start.unsqueeze(0), all_traj_init_guess # (20,T,B,2) 
+        return goal_logit_map_start.unsqueeze(0)
 
 
     def get_loss(self, inputs, seq_list):
@@ -597,18 +573,16 @@ class goal_pretrainer(object):
 
             # compute metric_mask
             metric_mask = compute_metric_mask(seq_list)
-            predictions,traj_init_guess = self.net.forward(
+            predictions = self.net.forward(
                 inputs) # (21,Tp+Tf,B,2) 
 
             # update metrics
-            # print('using traj_init_guess')
             for metric_name in metrics_epoch.keys():
                 # print(metric_name)
                 metrics_epoch[metric_name].extend(
                     self.net.compute_model_metrics(
                         metric_name=metric_name,
                         predictions=predictions,
-                        traj_init_guess=traj_init_guess,
                         ground_truth = ground_truth,
                         seq_list=seq_list,
                         metric_mask=metric_mask,
