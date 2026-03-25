@@ -43,9 +43,11 @@ Part of the code is borrowed from [Goal-SAR](https://github.com/luigifilippochia
 If you find this code useful for your research, please cite our paper:
 
 ```bibtex
-@article{sun2023gdts,
-  title={GDTS: Goal-Guided Diffusion Model with Tree Sampling for Multi-Modal Pedestrian Trajectory Prediction},
-  author={Sun, Ge and Wang, Sheng and Zhu, Lei and Liu, Ming and Ma, Jun},
-  journal={arXiv preprint arXiv:2311.14922},
-  year={2023}
+@inproceedings{sun2025gdts,
+    title={\uppercase{GDTS}: Goal-Guided Diffusion Model with Tree Sampling for Multi-Modal Pedestrian Trajectory Prediction},
+    author={Sun, Ge and Wang, Sheng and Zhu, Lei and Liu, Ming and Ma, Jun},
+    booktitle={2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+    pages={14595--14602},
+    year={2025},
+    organization={IEEE}
 }
